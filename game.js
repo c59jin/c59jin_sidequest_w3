@@ -1,128 +1,228 @@
-// NOTE: Do NOT add setup() or draw() in this file
-// setup() and draw() live in main.js
-// This file only defines:
-// 1) drawGame() → what the game screen looks like
-// 2) input handlers → what happens when the player clicks or presses keys
-// 3) helper functions specific to this screen
+// game.js
+// NOTE: Do NOT add setup() or draw() in this file.
+// main.js calls drawGame() when currentScreen === "game".
 
 // ------------------------------
-// Button data
+// Choice button data (two buttons)
 // ------------------------------
-// This object stores all the information needed to draw
-// and interact with the button on the game screen.
-// Keeping this in one object makes it easier to move,
-// resize, or restyle the button later.
-const gameBtn = {
-  x: 400, // x position (centre of the button)
-  y: 550, // y position (centre of the button)
-  w: 260, // width
-  h: 90, // height
-  label: "PRESS HERE", // text shown on the button
+const leftBtn = { x: 260, y: 610, w: 300, h: 90, label: "" };
+const rightBtn = { x: 540, y: 610, w: 300, h: 90, label: "" };
+
+// ------------------------------
+// Decision tree (branching story)
+// Each node has text + two choices.
+// choice: { label, karmaDelta, next }
+// next can be another node id OR "END_CHECK"
+// ------------------------------
+const STORY = {
+  intro: {
+    title: "Midnight Metro",
+    text:
+      "The last train is almost empty.\n" +
+      "A stranger drops their phone and doesn't notice.\n\n" +
+      "What do you do?",
+    choices: [
+      { label: "Pick it up + chase them", karmaDelta: +1, next: "chase" },
+      { label: "Pocket it quietly", karmaDelta: -1, next: "pocket" },
+    ],
+  },
+
+  chase: {
+    title: "Closing Doors",
+    text:
+      "You sprint toward the doors.\n" +
+      "The stranger is stepping off.\n\n" +
+      "How do you get their attention?",
+    choices: [
+      { label: "Call out loudly", karmaDelta: +1, next: "platform_guard" },
+      {
+        label: "Tap their shoulder (carefully)",
+        karmaDelta: 0,
+        next: "platform_guard",
+      },
+    ],
+  },
+
+  pocket: {
+    title: "Vibration in Your Pocket",
+    text: "The phone buzzes.\n" + "Caller ID: “MOM”.\n\n" + "What do you do?",
+    choices: [
+      {
+        label: "Answer: 'I found this phone'",
+        karmaDelta: +1,
+        next: "platform_guard",
+      },
+      { label: "Power it off", karmaDelta: -1, next: "platform_guard" },
+    ],
+  },
+
+  platform_guard: {
+    title: "Station Platform",
+    text:
+      "A security guard points at you.\n" +
+      "“Hey! Did you see someone lose something?”\n\n" +
+      "How do you respond?",
+    choices: [
+      { label: "Tell the truth", karmaDelta: 0, next: "help_or_hide" },
+      { label: "Lie to avoid trouble", karmaDelta: -1, next: "help_or_hide" },
+    ],
+  },
+
+  help_or_hide: {
+    title: "A Choice of Direction",
+    text:
+      "The guard looks overwhelmed.\n" +
+      "You spot two paths:\n" +
+      "- A bright 24h cafe\n" +
+      "- A dim alley exit\n\n" +
+      "Where do you go next?",
+    choices: [
+      { label: "Go to the cafe (safe, public)", karmaDelta: +1, next: "cafe" },
+      { label: "Slip into the alley (quiet)", karmaDelta: -1, next: "alley" },
+    ],
+  },
+
+  cafe: {
+    title: "24h Cafe",
+    text:
+      "Inside, you find a wallet on the counter.\n" +
+      "It's full of cash and an ID.\n\n" +
+      "Final choice:",
+    choices: [
+      { label: "Return it to staff", karmaDelta: +1, next: "END_CHECK" },
+      { label: "Take it and leave", karmaDelta: -2, next: "END_CHECK" },
+    ],
+  },
+
+  alley: {
+    title: "Alley Exit",
+    text:
+      "Trash cans. Neon puddles.\n" +
+      "A wallet lies near the curb.\n\n" +
+      "Final choice:",
+    choices: [
+      { label: "Turn it in at the station", karmaDelta: +1, next: "END_CHECK" },
+      { label: "Keep it (no one saw)", karmaDelta: -2, next: "END_CHECK" },
+    ],
+  },
 };
 
 // ------------------------------
-// Main draw function for this screen
+// Main draw function (game screen)
 // ------------------------------
-// drawGame() is called from main.js *only*
-// when currentScreen === "game"
 function drawGame() {
-  // Set background colour for the game screen
-  background(240, 230, 140);
+  background(245, 235, 210);
 
-  // ---- Title and instructions text ----
-  fill(0); // black text
-  textSize(32);
-  textAlign(CENTER, CENTER);
-  text("Game Screen", width / 2, 160);
+  // Safety: recover if storyNode is invalid
+  if (!STORY[storyNode]) storyNode = "intro";
 
+  const node = STORY[storyNode];
+
+  // --- Header ---
+  fill(20);
+  textAlign(CENTER, TOP);
+  textSize(36);
+  text(node.title, width / 2, 70);
+
+  // Stat display (karma)
   textSize(18);
-  text(
-    "Click the button (or press ENTER) for a random result.",
-    width / 2,
-    210,
-  );
+  textAlign(LEFT, TOP);
+  text(`KARMA: ${karma}`, 30, 30);
 
-  // ---- Draw the button ----
-  // We pass the button object to a helper function
-  drawGameButton(gameBtn);
+  // --- Story text ---
+  fill(30);
+  textAlign(CENTER, TOP);
+  textSize(20);
 
-  // ---- Cursor feedback ----
-  // If the mouse is over the button, show a hand cursor
-  // Otherwise, show the normal arrow cursor
-  cursor(isHover(gameBtn) ? HAND : ARROW);
+  const boxX = width / 2;
+  const boxY = 160;
+  const boxW = 640;
+  text(node.text, boxX, boxY, boxW);
+
+  // --- Buttons ---
+  leftBtn.label = node.choices[0].label;
+  rightBtn.label = node.choices[1].label;
+
+  drawChoiceButton(leftBtn);
+  drawChoiceButton(rightBtn);
+
+  // Cursor feedback
+  const over = isHover(leftBtn) || isHover(rightBtn);
+  cursor(over ? HAND : ARROW);
+
+  // Keyboard hint
+  textAlign(CENTER, TOP);
+  textSize(14);
+  fill(60);
+  text("Press 1 (left) or 2 (right). Press R to restart.", width / 2, 720);
 }
 
 // ------------------------------
 // Button drawing helper
 // ------------------------------
-// This function is responsible *only* for drawing the button.
-// It does NOT handle clicks or game logic.
-function drawGameButton({ x, y, w, h, label }) {
+function drawChoiceButton({ x, y, w, h, label }) {
   rectMode(CENTER);
-
-  // Check if the mouse is hovering over the button
-  // isHover() is defined in main.js so it can be shared
   const hover = isHover({ x, y, w, h });
 
   noStroke();
+  fill(hover ? color(180, 220, 255, 230) : color(200, 220, 255, 190));
+  rect(x, y, w, h, 14);
 
-  // Change button colour when hovered
-  // This gives visual feedback to the player
-  fill(
-    hover
-      ? color(180, 220, 255, 220) // lighter blue on hover
-      : color(200, 220, 255, 190), // normal state
-  );
-
-  // Draw the button rectangle
-  rect(x, y, w, h, 14); // last value = rounded corners
-
-  // Draw the button text
-  fill(0);
-  textSize(28);
+  fill(10);
   textAlign(CENTER, CENTER);
-  text(label, x, y);
+  textSize(16);
+  text(label, x, y, w - 30, h - 20);
 }
 
 // ------------------------------
-// Mouse input for this screen
+// Apply a choice
 // ------------------------------
-// This function is called from main.js
-// only when currentScreen === "game"
-function gameMousePressed() {
-  // Only trigger the outcome if the button is clicked
-  if (isHover(gameBtn)) {
-    triggerRandomOutcome();
-  }
+function pickChoice(choiceIndex) {
+  const node = STORY[storyNode];
+  const choice = node.choices[choiceIndex];
+
+  // Update stat
+  karma += choice.karmaDelta;
+
+  // Move story forward
+  if (choice.next === "END_CHECK") resolveEnding();
+  else storyNode = choice.next;
 }
 
 // ------------------------------
-// Keyboard input for this screen
+// Ending logic based on karma
+// Unlocks different endings
 // ------------------------------
-// Allows keyboard-only interaction (accessibility + design)
-function gameKeyPressed() {
-  // ENTER key triggers the same behaviour as clicking the button
-  if (keyCode === ENTER) {
-    triggerRandomOutcome();
-  }
-}
-
-// ------------------------------
-// Game logic: win or lose
-// ------------------------------
-// This function decides what happens next in the game.
-// It does NOT draw anything.
-function triggerRandomOutcome() {
-  // random() returns a value between 0 and 1
-  // Here we use a 50/50 chance:
-  // - less than 0.5 → win
-  // - 0.5 or greater → lose
-  //
-  // You can bias this later, for example:
-  // random() < 0.7 → 70% chance to win
-  if (random() < 0.5) {
+function resolveEnding() {
+  // Possible karma range is roughly -6 to +5 depending on choices
+  if (karma >= 3) {
+    endingId = "legend";
     currentScreen = "win";
+  } else if (karma >= 1) {
+    endingId = "decent";
+    currentScreen = "win";
+  } else if (karma <= -3) {
+    endingId = "caught";
+    currentScreen = "lose";
   } else {
+    endingId = "regret";
     currentScreen = "lose";
   }
+}
+
+// ------------------------------
+// Mouse input
+// ------------------------------
+function gameMousePressed() {
+  if (isHover(leftBtn)) pickChoice(0);
+  else if (isHover(rightBtn)) pickChoice(1);
+}
+
+// ------------------------------
+// Keyboard input (accessibility)
+// ------------------------------
+function gameKeyPressed() {
+  if (key === "1") pickChoice(0);
+  if (key === "2") pickChoice(1);
+  if (key === "r" || key === "R") startNewGame();
 }
